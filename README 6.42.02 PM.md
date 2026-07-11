@@ -61,4 +61,4 @@ See `ETHICS.md` for a full reflection on potential harms, sources of bias, and w
 
 ## Team
 
-Mara, Rayan, [add name] — Summer 2026
+Mara, Rayan, Katarina— Summer 2026
