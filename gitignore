@@ -1,0 +1,16 @@
+# Product images (download separately - see README)
+images/
+
+# Leftover Kaggle download files
+extra/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
