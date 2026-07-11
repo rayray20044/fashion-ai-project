@@ -1,202 +1,463 @@
 import streamlit as st
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import NearestNeighbors
-from sklearn.metrics import accuracy_score
 
-st.set_page_config(page_title="Fashion Recommender", layout="centered")
+# ── Page config ────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="ATELIER · Fashion Recommender",
+    page_icon="✦",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
-# ---------------------------------------------------------------------
-# Load + prep data (cached so it only runs once, not on every click)
-# ---------------------------------------------------------------------
+# ── Design system ───────────────────────────────────────────────────────────────
+# Palette: parchment cream / ink / warm stone / faded gold
+# Type: DM Serif Display (editorial) + DM Sans (utility)
+# Signature element: a thin horizontal rule with a centred diamond ✦ — used
+# as a section divider. Quiet, precise, unmistakably fashion-editorial.
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
+
+/* ── Reset & base ── */
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #F5F0E8;
+    color: #1A1A1A;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+}
+
+[data-testid="stAppViewContainer"] {
+    background-color: #F5F0E8;
+}
+
+[data-testid="stHeader"] {
+    background-color: #F5F0E8;
+    border-bottom: 1px solid #D4C9B0;
+}
+
+/* Hide Streamlit chrome */
+#MainMenu, footer, [data-testid="stToolbar"] { visibility: hidden; }
+
+/* ── Masthead ── */
+.masthead {
+    text-align: center;
+    padding: 3.5rem 0 1rem;
+    letter-spacing: 0.35em;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #7A6E5F;
+    text-transform: uppercase;
+}
+
+.brand {
+    font-family: 'DM Serif Display', serif;
+    font-size: 3.2rem;
+    letter-spacing: 0.08em;
+    color: #1A1A1A;
+    line-height: 1;
+    margin: 0.25rem 0 0.5rem;
+}
+
+.tagline {
+    font-size: 0.78rem;
+    letter-spacing: 0.22em;
+    color: #7A6E5F;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+}
+
+/* ── Diamond divider (the signature element) ── */
+.divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+    color: #B5A88A;
+    font-size: 0.65rem;
+    letter-spacing: 0.3em;
+}
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #D4C9B0;
+}
+
+/* ── Tabs ── */
+[data-testid="stTabs"] [role="tablist"] {
+    gap: 0;
+    border-bottom: 1px solid #D4C9B0;
+    background: transparent;
+    justify-content: center;
+    padding-bottom: 0;
+}
+
+[data-testid="stTabs"] [role="tab"] {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+    padding: 0.75rem 2.5rem;
+    border: none;
+    background: transparent;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+[data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+    color: #1A1A1A;
+    border-bottom: 2px solid #1A1A1A;
+    background: transparent;
+}
+
+/* ── Selectboxes ── */
+[data-testid="stSelectbox"] label {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+}
+
+[data-testid="stSelectbox"] > div > div {
+    background-color: transparent;
+    border: 1px solid #D4C9B0;
+    border-radius: 0;
+    color: #1A1A1A;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem;
+}
+
+[data-testid="stSelectbox"] > div > div:hover {
+    border-color: #1A1A1A;
+}
+
+/* ── Button ── */
+[data-testid="stButton"] > button {
+    background-color: #1A1A1A;
+    color: #F5F0E8;
+    border: none;
+    border-radius: 0;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    padding: 0.85rem 3rem;
+    width: 100%;
+    transition: background 0.2s ease;
+}
+
+[data-testid="stButton"] > button:hover {
+    background-color: #3D3530;
+    color: #F5F0E8;
+    border: none;
+}
+
+/* ── Product cards ── */
+.product-card {
+    border: 1px solid #D4C9B0;
+    padding: 1.2rem;
+    background: #FAF7F2;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.product-card:hover {
+    border-color: #1A1A1A;
+}
+
+.product-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: 0.9rem;
+    color: #1A1A1A;
+    margin: 0.75rem 0 0.3rem;
+    line-height: 1.3;
+}
+
+.product-meta {
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+}
+
+/* ── Section labels ── */
+.section-label {
+    font-size: 0.62rem;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+}
+
+/* ── Prediction chip ── */
+.prediction-box {
+    border: 1px solid #D4C9B0;
+    padding: 1rem 1.5rem;
+    background: #FAF7F2;
+    text-align: center;
+    margin: 1.5rem auto;
+    max-width: 320px;
+}
+
+.prediction-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+    margin-bottom: 0.35rem;
+}
+
+.prediction-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    color: #1A1A1A;
+}
+
+/* ── Outfit builder slots ── */
+.outfit-slot-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: #7A6E5F;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background-color: #EDE8DE;
+    border-right: 1px solid #D4C9B0;
+}
+
+/* ── Image placeholder ── */
+.img-placeholder {
+    background: #EDE8DE;
+    height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: #B5A88A;
+}
+
+/* ── Empty state ── */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #7A6E5F;
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── Data & models ──────────────────────────────────────────────────────────────
 @st.cache_data
 def load_data():
     df = pd.read_csv("styles.csv", on_bad_lines="skip")
-    df_clean = df.dropna(subset=["baseColour", "season", "year", "usage", "productDisplayName"])
-    return df_clean
+    df = df.dropna(subset=["baseColour", "season", "year", "usage", "productDisplayName"])
+    return df.reset_index(drop=True)
 
-@st.cache_resource
-def train_models(df_clean):
-    features = ["gender", "masterCategory", "subCategory", "baseColour", "season", "usage"]
-    target = "articleType"
 
-    X = df_clean[features]
-    y = df_clean[target]
-    X_encoded = pd.get_dummies(X)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_encoded, y, test_size=0.20, random_state=42
-    )
-
-    clf_forest = RandomForestClassifier(n_estimators=100, random_state=42)
-    clf_forest.fit(X_train, y_train)
-    accuracy_forest = accuracy_score(y_test, clf_forest.predict(X_test))
-
-    recommender = NearestNeighbors(n_neighbors=5, metric="euclidean")
-    recommender.fit(X_encoded)
-
-    return clf_forest, accuracy_forest, recommender, X_encoded
-
-@st.cache_resource
-def train_outfit_models(df_clean):
-    """
-    Stores each outfit slot's raw data (Top / Bottom / Shoes). Matching happens
-    at request time in build_outfit(), which filters by season FIRST, then finds
-    the closest match on gender/colour/usage within that season. This avoids
-    picking an item that matches colour but is the wrong season (e.g. shorts
-    for a winter outfit).
-    """
-    slot_filters = {
-        "Top": df_clean["subCategory"] == "Topwear",
-        "Bottom": df_clean["subCategory"] == "Bottomwear",
-        "Shoes": df_clean["masterCategory"] == "Footwear",
+def build_outfit(df, gender, colour, season, usage):
+    slots = {
+        "Top":    ("Apparel", "Topwear"),
+        "Bottom": ("Apparel", "Bottomwear"),
+        "Shoes":  ("Footwear", "Shoes"),
     }
-    return {slot: df_clean[mask].reset_index(drop=True) for slot, mask in slot_filters.items()}
+    results = {}
+    for slot, (master, sub) in slots.items():
+        pool = df[
+            (df["masterCategory"] == master) &
+            (df["season"] == season)
+        ]
+        if pool.empty:
+            pool = df[df["masterCategory"] == master]
+        if pool.empty:
+            continue
+        pool_reset = pool.reset_index(drop=True)
+        feats = ["gender", "baseColour", "usage"]
+        Xp = pd.get_dummies(pool_reset[feats])
+        user = pd.DataFrame([{"gender": gender, "baseColour": colour, "usage": usage}])
+        user_enc = pd.get_dummies(user).reindex(columns=Xp.columns, fill_value=0)
+        nn_slot = NearestNeighbors(n_neighbors=1, metric="hamming")
+        nn_slot.fit(Xp)
+        _, idx = nn_slot.kneighbors(user_enc)
+        results[slot] = pool_reset.iloc[idx[0][0]]
+    return results
 
-df_clean = load_data()
-clf_forest, accuracy_forest, recommender, X_encoded = train_models(df_clean)
-slot_data = train_outfit_models(df_clean)
 
-def build_outfit(gender, baseColour, season, usage):
-    """
-    Returns one matching item per slot (Top, Bottom, Shoes).
-    Filters to the correct season first (falling back to the full slot only
-    if nothing in that season exists), then finds the closest match on
-    gender/colour/usage within that season-correct pool. This guarantees
-    season correctness is never sacrificed just to match colour.
-    """
-    outfit = {}
-    for slot, sub_df in slot_data.items():
-        season_matched = sub_df[sub_df["season"] == season]
-        pool = season_matched if len(season_matched) > 0 else sub_df
+def show_product(row, label=None):
+    """Render a single product card."""
+    if label:
+        st.markdown(f'<div class="outfit-slot-label">{label}</div>', unsafe_allow_html=True)
+    image_path = f"images/{row['id']}.jpg"
+    try:
+        st.image(image_path, use_container_width=True)
+    except Exception:
+        st.markdown('<div class="img-placeholder">✦</div>', unsafe_allow_html=True)
+    st.markdown(f"""
+        <div class="product-name">{row['productDisplayName']}</div>
+        <div class="product-meta">{row['baseColour']} · {row['season']} · {row['usage']}</div>
+    """, unsafe_allow_html=True)
 
-        feats_encoded = pd.get_dummies(pool[["gender", "baseColour", "usage"]])
-        nn = NearestNeighbors(n_neighbors=1)
-        nn.fit(feats_encoded)
 
-        user_input = pd.DataFrame([{"gender": gender, "baseColour": baseColour, "usage": usage}])
-        user_encoded = pd.get_dummies(user_input).reindex(columns=feats_encoded.columns, fill_value=0)
-        _, idx = nn.kneighbors(user_encoded, n_neighbors=1)
+# ── Load ───────────────────────────────────────────────────────────────────────
+df = load_data()
 
-        outfit[slot] = pool.reset_index(drop=True).iloc[idx[0][0]]
-    return outfit
+# ── Masthead ───────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="masthead">SRH Berlin · AI Fashion Project</div>
+<div class="brand">ATELIER</div>
+<div class="tagline">Personal Style Intelligence</div>
+""", unsafe_allow_html=True)
 
-# ---------------------------------------------------------------------
-# Recommender function (same logic tested earlier in the notebook)
-# ---------------------------------------------------------------------
-def recommend(gender, masterCategory, subCategory, baseColour, season, usage, n=5):
-    user_input = pd.DataFrame([{
-        "gender": gender, "masterCategory": masterCategory,
-        "subCategory": subCategory, "baseColour": baseColour,
-        "season": season, "usage": usage
-    }])
-    user_encoded = pd.get_dummies(user_input).reindex(columns=X_encoded.columns, fill_value=0)
-    distances, indices = recommender.kneighbors(user_encoded, n_neighbors=n)
-    return df_clean.iloc[indices[0]][
-        ["id", "productDisplayName", "articleType", "baseColour", "season", "usage"]
-    ]
+st.markdown('<div class="divider">✦</div>', unsafe_allow_html=True)
 
-def predict_category(gender, masterCategory, subCategory, baseColour, season, usage):
-    user_input = pd.DataFrame([{
-        "gender": gender, "masterCategory": masterCategory,
-        "subCategory": subCategory, "baseColour": baseColour,
-        "season": season, "usage": usage
-    }])
-    user_encoded = pd.get_dummies(user_input).reindex(columns=X_encoded.columns, fill_value=0)
-    return clf_forest.predict(user_encoded)[0]
+# ── Tabs ───────────────────────────────────────────────────────────────────────
+tab1, tab2 = st.tabs(["DISCOVER", "OUTFIT"])
 
-# ---------------------------------------------------------------------
-# UI
-# ---------------------------------------------------------------------
-st.title("👕 Fashion Recommendation System")
-st.caption(
-    f"Trained on {len(df_clean):,} products · Random Forest classifier accuracy: {accuracy_forest*100:.2f}%"
-)
-
-st.write(
-    "Use **Item Recommender** to find products similar to a specific preference, "
-    "or **Outfit Builder** to assemble a complete, colour-coordinated outfit."
-)
-
-tab1, tab2 = st.tabs(["🔎 Item Recommender", "👔 Outfit Builder"])
-
-# =======================================================================
-# TAB 1 - Item Recommender + Classifier (existing feature)
-# =======================================================================
+# ────────────────────────────────────────────────────────────────────────────────
 with tab1:
-    col1, col2 = st.columns(2)
+    st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
+
+    # Row 1 — Gender, Category, SubCategory (dynamic)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        gender = st.selectbox("Gender", sorted(df_clean["gender"].unique()), key="t1_gender")
-        masterCategory = st.selectbox("Master Category", sorted(df_clean["masterCategory"].unique()), key="t1_master")
-        sub_options = sorted(df_clean[df_clean["masterCategory"] == masterCategory]["subCategory"].unique())
-        subCategory = st.selectbox("Sub Category", sub_options, key="t1_sub")
-
+        gender = st.selectbox("Gender", sorted(df["gender"].unique()))
     with col2:
-        baseColour = st.selectbox("Colour", sorted(df_clean["baseColour"].unique()), key="t1_colour")
-        season = st.selectbox("Season", sorted(df_clean["season"].unique()), key="t1_season")
-        usage = st.selectbox("Usage", sorted(df_clean["usage"].unique()), key="t1_usage")
+        # Only show useful categories
+        useful_masters = ["Apparel", "Footwear", "Accessories"]
+        master = st.selectbox("Category", useful_masters)
+    with col3:
+        sub_options = sorted(df[df["masterCategory"] == master]["subCategory"].unique())
+        subcat = st.selectbox("Type", sub_options)
 
-    if st.button("Get Recommendations", type="primary"):
-        st.subheader("🔎 Recommended Items")
-        results = recommend(gender, masterCategory, subCategory, baseColour, season, usage)
+    # Row 2 — Colour, Season, Occasion
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        colour = st.selectbox("Colour", sorted(df["baseColour"].unique()))
+    with col5:
+        season = st.selectbox("Season", sorted(df["season"].unique()))
+    with col6:
+        usage = st.selectbox("Occasion", sorted(df["usage"].dropna().unique()))
 
-        # Show each recommendation as a photo card instead of a plain table.
-        # Requires an images/ folder (download "Fashion Product Images Small" from
-        # Kaggle) containing files named images/{id}.jpg
-        cols = st.columns(len(results))
-        for col, (_, row) in zip(cols, results.iterrows()):
-            with col:
-                image_path = f"images/{row['id']}.jpg"
-                try:
-                    st.image(image_path, width='stretch')
-                except Exception:
-                    st.write("📷 (image not found)")
-                st.caption(f"**{row['productDisplayName']}**\n\n{row['baseColour']} · {row['season']} · {row['usage']}")
+    st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
-        st.subheader("🤖 Classifier Prediction")
-        predicted = predict_category(gender, masterCategory, subCategory, baseColour, season, usage)
-        st.info(f"Based on these attributes, the classifier predicts this item is most likely a: **{predicted}**")
+    _, btn_col, _ = st.columns([2, 1, 2])
+    with btn_col:
+        search = st.button("Discover Pieces")
 
-# =======================================================================
-# TAB 2 - Outfit Builder (new feature)
-# =======================================================================
+    st.markdown('<div class="divider">✦</div>', unsafe_allow_html=True)
+
+    if search:
+        # Hard filter: type + season + occasion
+        pool = df[
+            (df["subCategory"] == subcat) &
+            (df["season"] == season) &
+            (df["usage"] == usage)
+        ].reset_index(drop=True)
+
+        # Relax to type only if nothing matched
+        if pool.empty:
+            pool = df[df["subCategory"] == subcat].reset_index(drop=True)
+
+        if pool.empty:
+            st.markdown('<div class="empty-state">No items found for this combination.</div>',
+                        unsafe_allow_html=True)
+        else:
+            # Rank by colour closeness: exact match → partial string match → rest
+            c = colour.lower()
+            col_lower = pool["baseColour"].str.lower()
+            exact_mask   = col_lower == c
+            partial_mask = ~exact_mask & (
+                col_lower.str.contains(c, regex=False, na=False) |
+                col_lower.apply(lambda v: v in c)
+            )
+            results = pd.concat([
+                pool[exact_mask],
+                pool[partial_mask],
+                pool[~exact_mask & ~partial_mask],
+            ]).head(5)
+
+            st.markdown('<div class="section-label" style="text-align:center">Selected For You</div>',
+                        unsafe_allow_html=True)
+
+            cols = st.columns(5)
+            for col, (_, row) in zip(cols, results.iterrows()):
+                with col:
+                    st.markdown('<div class="product-card">', unsafe_allow_html=True)
+                    show_product(row)
+                    st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div class="empty-state">
+                Select your preferences above<br>and discover your pieces.
+            </div>
+        """, unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────────────────────────────────────
 with tab2:
-    st.write(
-        "Pick a colour, season, and usage - we'll assemble a complete outfit "
-        "(top, bottom, shoes) that all match those preferences."
-    )
+    st.markdown('<div style="height:1.5rem"></div>', unsafe_allow_html=True)
 
-    oc1, oc2 = st.columns(2)
+    oc1, oc2, oc3 = st.columns(3)
     with oc1:
-        o_gender = st.selectbox("Gender", sorted(df_clean["gender"].unique()), key="t2_gender")
-        o_colour = st.selectbox("Colour", sorted(df_clean["baseColour"].unique()), key="t2_colour")
+        o_gender = st.selectbox("Gender ", sorted(df["gender"].unique()), key="og")
     with oc2:
-        o_season = st.selectbox("Season", sorted(df_clean["season"].unique()), key="t2_season")
-        o_usage = st.selectbox("Usage", sorted(df_clean["usage"].unique()), key="t2_usage")
+        o_colour = st.selectbox("Colour ", sorted(df["baseColour"].unique()), key="oc")
+    with oc3:
+        o_season = st.selectbox("Season ", sorted(df["season"].unique()), key="os")
 
-    if st.button("Build My Outfit", type="primary"):
-        st.subheader("👔 Your Outfit")
-        outfit = build_outfit(o_gender, o_colour, o_season, o_usage)
+    o_usage = st.selectbox("Occasion ", sorted(df["usage"].dropna().unique()), key="ou")
 
-        slot_cols = st.columns(3)
-        for col, (slot, item) in zip(slot_cols, outfit.items()):
-            with col:
-                st.markdown(f"**{slot}**")
-                image_path = f"images/{item['id']}.jpg"
-                try:
-                    st.image(image_path, width='stretch')
-                except Exception:
-                    st.write("📷 (image not found)")
-                st.caption(f"{item['productDisplayName']}\n\n{item['baseColour']} · {item['season']} · {item['usage']}")
+    st.markdown('<div style="height:1rem"></div>', unsafe_allow_html=True)
 
-st.divider()
-with st.expander("ℹ️ About this project"):
-    st.write(
-        "Built for BSDC-DEVDP-28A · Introduction to Artificial Intelligence. "
-        "The recommender uses K-Nearest Neighbors similarity search over one-hot "
-        "encoded product attributes to return comparable items. The classifier is a "
-        "separate Random Forest model predicting a single articleType label, included "
-        "to demonstrate supervised classification performance and its limitations "
-        "(see report for the subCategory-hierarchy finding)."
-    )
+    _, obtn_col, _ = st.columns([2, 1, 2])
+    with obtn_col:
+        build = st.button("Build Outfit")
+
+    st.markdown('<div class="divider">✦</div>', unsafe_allow_html=True)
+
+    if build:
+        outfit = build_outfit(df, o_gender, o_colour, o_season, o_usage)
+
+        if outfit:
+            st.markdown('<div class="section-label" style="text-align:center">Your Outfit</div>',
+                        unsafe_allow_html=True)
+            slot_cols = st.columns(len(outfit))
+            for col, (slot, item) in zip(slot_cols, outfit.items()):
+                with col:
+                    st.markdown('<div class="product-card">', unsafe_allow_html=True)
+                    show_product(item, label=slot)
+                    st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.markdown("""
+                <div class="empty-state">No outfit could be assembled for this combination.</div>
+            """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+            <div class="empty-state">
+                Tell us your style and we'll put the look together.
+            </div>
+        """, unsafe_allow_html=True)
+
+# ── Footer ─────────────────────────────────────────────────────────────────────
+st.markdown('<div style="height:3rem"></div>', unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align:center; font-size:0.6rem; letter-spacing:0.3em;
+     text-transform:uppercase; color:#B5A88A; border-top:1px solid #D4C9B0;
+     padding-top:1.5rem; margin-top:1rem;">
+    BSDC-DEVDP-28A · Introduction to Artificial Intelligence · SRH Berlin University of Applied Sciences
+</div>
+""", unsafe_allow_html=True)
